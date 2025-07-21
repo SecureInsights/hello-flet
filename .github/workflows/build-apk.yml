@@ -22,9 +22,9 @@ jobs:
 
       - uses: subosito/flutter-action@v2
         with:
-          flutter-version: "3.16.0"  # 更新到最新稳定版
+          flutter-version: "3.16.0"
           channel: stable
-          cache: true  # 启用缓存
+          cache: true
 
       - uses: actions/setup-python@v5
         with:
@@ -34,8 +34,14 @@ jobs:
 
       - run: yes | flutter doctor --android-licenses || true
 
-      - name: Add execute permission to gradlew
-        run: chmod +x android/gradlew
+      - name: Add execute permission to gradlew (if exists)
+        run: |
+          if [ -f "android/gradlew" ]; then
+            chmod +x android/gradlew
+          else
+            echo "android/gradlew not found, skipping..."
+          fi
+        shell: bash
 
       - run: flet build apk --verbose
 
