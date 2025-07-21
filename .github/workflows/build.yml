@@ -1,39 +1,78 @@
 name: Build Flet Apps
 
 on:
-  push:
-    tags: [ "v*" ]
+  # 手动触发，可在 Actions 页面单独点 Run
   workflow_dispatch:
 
+  # 打 tag 时触发；两个 Job 都会跑
+  push:
+    tags:
+      - "v*"
+
 jobs:
-  windows-exe:
+  # ───────────── Windows EXE ─────────────
+  build-exe:
+    name: Build Windows EXE
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - run: pip install -r requirements.txt pyinstaller
-      - run: pyinstaller -F main.py --name HelloFlet
-      - uses: actions/upload-artifact@v4
+
+      - name: Install Python deps
+        run: |
+          pip install -r requirements.txt pyinstaller
+
+      - name: Build EXE with PyInstaller
+        run: |
+          pyinstaller -F -w main.py --name HelloFlet
+
+      - name: Upload EXE
+        uses: actions/upload-artifact@v4
         with:
           name: HelloFlet-Windows
           path: dist/HelloFlet.exe
+          if-no-files-found: error
 
-  android-apk:
+  # ───────────── Android APK ─────────────
+  build-apk:
+    name: Build Android APK
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: subosito/flutter-action@v2
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
         with:
-          flutter-version: "3.19"
+          distribution: temurin
+          java-version: 17
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.24.5"
           channel: stable
-      - uses: actions/setup-python@v5
+          cache: true
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - run: pip install flet
-      - run: flet build apk --verbose
-      - uses: actions/upload-artifact@v4
+
+      - name: Install Flet
+        run: pip install flet==0.28.3
+
+      - name: Build APK
+        run: flet build apk --verbose
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
         with:
           name: HelloFlet-Android
-          path: build/app/outputs/flutter-apk/app-release.apk
+          path: build/app/outputs/apk/release/app-release.apk
+          if-no-files-found: error
