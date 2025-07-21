@@ -15,14 +15,16 @@ jobs:
           distribution: temurin
           java-version: 17
 
-      # 官方 action 会一次性装好 Flutter + Android SDK
+      - uses: android-actions/setup-android@v3
+        with:
+          cmdline-tools-version: 11076708
+          packages: platform-tools build-tools;34.0.0 platforms;android-34
+
       - uses: subosito/flutter-action@v2
         with:
-          flutter-version: "3.24.5"
+          flutter-version: "3.16.0"  # 更新到最新稳定版
           channel: stable
-          cache: false
-          android: true            # 关键：让 action 自带 cmdline-tools
-          setup-android-sdk: true  # 关键：让 action 自动装 platform-tools / build-tools
+          cache: true  # 启用缓存
 
       - uses: actions/setup-python@v5
         with:
@@ -30,13 +32,14 @@ jobs:
 
       - run: pip install flet==0.28.3
 
-      # 自动接受许可证
       - run: yes | flutter doctor --android-licenses || true
 
-      # 构建
+      - name: Add execute permission to gradlew
+        run: chmod +x android/gradlew
+
       - run: flet build apk --verbose
 
       - uses: actions/upload-artifact@v4
         with:
           name: HelloFlet-Android
-          path: build/app/outputs/apk/release/app-release.apk
+          path: build/app/outputs/flutter-apk/release.apk
