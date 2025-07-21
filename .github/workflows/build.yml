@@ -1,0 +1,39 @@
+name: Build Flet Apps
+
+on:
+  push:
+    tags: [ "v*" ]
+  workflow_dispatch:
+
+jobs:
+  windows-exe:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -r requirements.txt pyinstaller
+      - run: pyinstaller -F main.py --name HelloFlet
+      - uses: actions/upload-artifact@v4
+        with:
+          name: HelloFlet-Windows
+          path: dist/HelloFlet.exe
+
+  android-apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.19"
+          channel: stable
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install flet
+      - run: flet build apk --verbose
+      - uses: actions/upload-artifact@v4
+        with:
+          name: HelloFlet-Android
+          path: build/app/outputs/flutter-apk/app-release.apk
