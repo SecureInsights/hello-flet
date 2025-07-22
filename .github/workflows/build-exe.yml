@@ -3,14 +3,14 @@ name: Build Windows EXE
 on:
   workflow_dispatch:
     inputs:
-      param1:
-        description: 'Parameter 1'
+      app_name:
+        description: '程序名称'
         required: true
-        default: 'default_value1'
-      param2:
-        description: 'Parameter 2'
+        default: 'HelloFlet'
+      icon_path:
+        description: '图标路径'
         required: true
-        default: 'default_value2'
+        default: 'assets/icon.ico'
   push:
     tags: [ "v*" ]
 
@@ -42,10 +42,10 @@ jobs:
 
       - name: Build EXE
         run: |
-          pyinstaller -F -w main.py --name HelloFlet --add-data "${{ github.event.inputs.param1 }};${{ github.event.inputs.param2 }}"
+          pyinstaller -F -w main.py --name ${{ github.event.inputs.app_name }} --icon ${{ github.event.inputs.icon_path }}
 
       - name: Upload EXE
         uses: actions/upload-artifact@v4
         with:
-          name: HelloFlet-Windows
-          path: dist/HelloFlet.exe
+          name: ${{ github.event.inputs.app_name }}-Windows
+          path: dist/${{ github.event.inputs.app_name }}.exe
