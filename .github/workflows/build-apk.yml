@@ -6,13 +6,13 @@ on:
       app_name:
         description: '应用名称'
         required: true
-        default: 'HelloFlet'
+        default: 'Todolist'
       icon_path:
         description: '图标路径（相对仓库根目录）'
         required: true
         default: 'assets/icon.png'
   push:
-    tags: [ "v*" ]
+    tags: ["v*"]
 
 jobs:
   android-apk:
@@ -37,41 +37,24 @@ jobs:
       - name: Install Flet
         run: pip install flet
 
-      - name: Cache Flutter
+      - name: Cache Flutter dependencies
         uses: actions/cache@v4
         with:
           path: |
             ~/.pub-cache
             ~/.gradle/caches
             ~/.gradle/wrapper
-          key: ${{ runner.os }}-flutter-${{ hashFiles('pubspec.yaml') }}
+          key: ${{ runner.os }}-flutter-${{ hashFiles('pubspec.yaml', 'pubspec.lock') }}
           restore-keys: |
             ${{ runner.os }}-flutter-
 
-      - name: Configure app name and icon
+      - name: 配置 pubspec.yaml（应用名称 + 图标）
         run: |
-          APP_NAME="${{ inputs.app_name || 'HelloFlet' }}"
-          ICON_PATH="${{ inputs.icon_path || 'assets/icon.png' }}"
+          APP_NAME="${{ inputs.app_name }}"
+          ICON_PATH="${{ inputs.icon_path }}"
           
-          # 创建或更新pubspec.yaml配置
-          if [ -f "pubspec.yaml" ]; then
-            # 备份现有文件
-            cp pubspec.yaml pubspec_backup.yaml
-            # 更新应用名称
-            sed -i "s/^name: .*/name: $APP_NAME/" pubspec.yaml
-            # 添加图标配置
-            if ! grep -q "flutter:" pubspec.yaml; then
-              echo "flutter:" >> pubspec.yaml
-            fi
-            if ! grep -q "icons:" pubspec.yaml; then
-              echo "  icons:" >> pubspec.yaml
-              echo "    android:" >> pubspec.yaml
-              echo "      adaptive:" >> pubspec.yaml
-              echo "        foreground: $ICON_PATH" >> pubspec.yaml
-            fi
-          else
-            # 创建新的pubspec.yaml
-            cat > pubspec.yaml << EOF
+          # 生成正确格式的 pubspec.yaml（使用 flutter_launcher_icons 插件配置图标）
+          cat > pubspec.yaml << EOF
           name: $APP_NAME
           description: A Flet application.
           publish_to: 'none'
@@ -84,30 +67,37 @@ jobs:
             flutter:
               sdk: flutter
             flet: ^0.212.0
+            flutter_launcher_icons: ^0.13.1  # 用于生成图标的插件
 
           flutter:
             uses-material-design: true
             assets:
-              - $ICON_PATH
-            icons:
-              android:
-                adaptive:
-                  foreground: $ICON_PATH
-          EOF
-          fi
+              - $ICON_PATH  # 确保图标作为资源被包含
 
-      - name: Build APK
-        run: flet build apk --verbose --project ${{ inputs.app_name || 'HelloFlet' }} --product ${{ inputs.app_name || 'HelloFlet' }}
-        
-      - name: Find APK
+          # 图标配置（使用插件的标准节点，而非 flutter 下的 icons）
+          flutter_icons:
+            android: "launcher_icon"
+            image_path: "$ICON_PATH"  # 指定图标路径
+            adaptive_icon_background: "#FFFFFF"  # 自适应图标背景（可选）
+            adaptive_icon_foreground: "$ICON_PATH"  # 自适应图标前景
+          EOF
+
+      - name: 安装依赖并生成图标
+        run: |
+          flutter pub get  # 安装 flutter_launcher_icons 插件
+          flutter pub run flutter_launcher_icons  # 生成图标
+
+      - name: 构建 APK（指定应用名称）
+        run: flet build apk --verbose --project ${{ inputs.app_name }} --product ${{ inputs.app_name }}
+
+      - name: 查找 APK 文件
         id: find_apk
         run: |
           apk_path=$(find build -name "*.apk" -type f | head -n 1)
           echo "APK_PATH=$apk_path" >> $GITHUB_OUTPUT
-          echo "Detected APK at: $apk_path"
 
-      - name: Upload artifact
+      - name: 上传 APK 产物
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ inputs.app_name || 'HelloFlet' }}-Android
+          name: ${{ inputs.app_name }}-Android
           path: ${{ steps.find_apk.outputs.APK_PATH }}
