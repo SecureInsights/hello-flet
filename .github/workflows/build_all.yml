@@ -1,0 +1,75 @@
+
+name: Build Flet Apps
+
+on:
+  workflow_dispatch:
+  push:
+    tags: [ "v*" ]
+
+jobs:
+  windows-exe:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install Python deps
+        run: |
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      - name: Build EXE
+        run: pyinstaller -F -w main.py --name HelloFlet
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: HelloFlet-Windows
+          path: dist/HelloFlet.exe
+
+  android-apk:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.19"
+          channel: stable
+          cache: true
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install Flet
+        run: pip install flet
+
+      - name: Cache Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
+
+      - name: Build APK
+        run: flet build apk --verbose
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: HelloFlet-Android
+          path: build/app/outputs/apk/release/app-release.apk
