@@ -1,11 +1,12 @@
-name: build-apk
+name: Build APK
+
 on:
   workflow_dispatch:
   push:
-    tags: ["v*"]
+    tags: [ "v*" ]
 
 jobs:
-  build-apk:
+  android-apk:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -22,9 +23,8 @@ jobs:
 
       - uses: subosito/flutter-action@v2
         with:
-          flutter-version: "3.16.0"
+          flutter-version: "3.29.2"
           channel: stable
-          cache: true
 
       - uses: actions/setup-python@v5
         with:
@@ -34,18 +34,9 @@ jobs:
 
       - run: yes | flutter doctor --android-licenses || true
 
-      - name: Add execute permission to gradlew (if exists)
-        run: |
-          if [ -f "android/gradlew" ]; then
-            chmod +x android/gradlew
-          else
-            echo "android/gradlew not found, skipping..."
-          fi
-        shell: bash
-
       - run: flet build apk --verbose
 
       - uses: actions/upload-artifact@v4
         with:
           name: HelloFlet-Android
-          path: build/app/outputs/flutter-apk/release.apk
+          path: build/app/outputs/flutter-apk/app-release.apk
