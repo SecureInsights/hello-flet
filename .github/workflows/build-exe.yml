@@ -34,6 +34,7 @@ jobs:
         run: |
           pip install -r requirements.txt
           pip install flet
+          pip install pyinstaller
 
       - name: Cache Flet build artifacts
         uses: actions/cache@v4
