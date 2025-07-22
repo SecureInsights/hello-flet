@@ -8,9 +8,9 @@ on:
         required: true
         default: 'Todolist'
       icon_path:
-        description: '图标路径（相对仓库根目录）'
+        description: '图标路径'
         required: true
-        default: 'assets/icon.png'
+        default: 'assets/todo.png'
   push:
     tags: ["v*"]
 
@@ -35,7 +35,7 @@ jobs:
           cache: "pip"
 
       - name: Install Flet
-        run: pip install flet  # 会安装最新兼容版本的 flet
+        run: pip install flet==0.28.3  # 与 CLI 版本一致
 
       - name: Cache Flutter dependencies
         uses: actions/cache@v4
@@ -44,16 +44,14 @@ jobs:
             ~/.pub-cache
             ~/.gradle/caches
             ~/.gradle/wrapper
-          key: ${{ runner.os }}-flutter-${{ hashFiles('pubspec.yaml', 'pubspec.lock') }}
+          key: ${{ runner.os }}-flutter-${{ hashFiles('pubspec.yaml') }}
           restore-keys: |
             ${{ runner.os }}-flutter-
 
-      - name: 配置 pubspec.yaml（应用名称 + 图标 + 正确依赖版本）
+      - name: 配置 pubspec.yaml
         run: |
           APP_NAME="${{ inputs.app_name }}"
           ICON_PATH="${{ inputs.icon_path }}"
-          
-          # 修正 flet 版本为 0.28.3（与 flet-cli 版本匹配）
           cat > pubspec.yaml << EOF
           name: $APP_NAME
           description: A Flet application.
@@ -66,15 +64,14 @@ jobs:
           dependencies:
             flutter:
               sdk: flutter
-            flet: ^0.28.3  # 使用与 flet-cli 匹配的版本
-            flutter_launcher_icons: ^0.13.1  # 图标插件
+            flet: ^0.28.3
+            flutter_launcher_icons: ^0.13.1
 
           flutter:
             uses-material-design: true
             assets:
               - $ICON_PATH
 
-          # 图标配置
           flutter_icons:
             android: "launcher_icon"
             image_path: "$ICON_PATH"
@@ -82,10 +79,13 @@ jobs:
             adaptive_icon_foreground: "$ICON_PATH"
           EOF
 
+      - name: 初始化 Android 项目结构（关键步骤）
+        run: flet build apk --verbose --dry-run  # 仅初始化不实际构建
+
       - name: 安装依赖并生成图标
         run: |
-          flutter pub get  # 安装依赖（含修正后的 flet 版本）
-          flutter pub run flutter_launcher_icons  # 生成图标
+          flutter pub get
+          flutter pub run flutter_launcher_icons  # 此时 AndroidManifest.xml 已存在
 
       - name: 构建 APK
         run: flet build apk --verbose --project ${{ inputs.app_name }} --product ${{ inputs.app_name }}
