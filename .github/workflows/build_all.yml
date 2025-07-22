@@ -49,7 +49,7 @@ jobs:
       - name: Setup Flutter & cache SDK
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: "3.19"
+          flutter-version: "3.29.2"  # 修改为 3.29.2
           channel: stable
           cache: true
 
@@ -62,18 +62,19 @@ jobs:
       - name: Install Flet
         run: pip install flet
 
-      - name: Cache Gradle
+      - name: Cache Flutter
         uses: actions/cache@v4
         with:
           path: |
+            ~/.pub-cache
             ~/.gradle/caches
             ~/.gradle/wrapper
-          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          key: ${{ runner.os }}-flutter-${{ hashFiles('pubspec.yaml') }}
           restore-keys: |
-            ${{ runner.os }}-gradle-
+            ${{ runner.os }}-flutter-
 
       - name: Build APK
-        run: flet build apk --verbose
+        run: flet build apk --verbose --offline
         
       - name: Find APK
         id: find_apk
