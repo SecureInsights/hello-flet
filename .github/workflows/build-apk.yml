@@ -2,24 +2,33 @@ name: Build Android APK
 
 on:
   workflow_dispatch:
+    inputs:
+      app_name:
+        description: '程序名称'
+        required: true
+        default: 'HelloFlet'
+      icon_path:
+        description: '图标 .png 路径（相对仓库根目录）'
+        required: true
+        default: 'assets/icon.png'
   push:
-    tags: [ "v*" ]
+    tags: ["v*"]
 
 jobs:
-  android-apk:
+  build-android-apk:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Flutter & cache SDK
+      - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: "3.29.2"  # 修改为 3.29.2
+          flutter-version: "3.29.2"
           channel: stable
           cache: true
 
-      - name: Setup Python & cache pip
+      - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
@@ -28,29 +37,63 @@ jobs:
       - name: Install Flet
         run: pip install flet
 
-      - name: Cache Flutter
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.pub-cache
-            ~/.gradle/caches
-            ~/.gradle/wrapper
-          key: ${{ runner.os }}-flutter-${{ hashFiles('pubspec.yaml') }}
-          restore-keys: |
-            ${{ runner.os }}-flutter-
+      - name: Prepare pubspec.yaml for Android build
+        run: |
+          # 创建或更新 pubspec.yaml 以配置应用图标
+          if [ -f "pubspec.yaml" ]; then
+            # 如果文件存在，添加图标配置
+            echo "flutter:" >> pubspec.yaml
+            echo "  assets:" >> pubspec.yaml
+            echo "    - ${{ inputs.icon_path || 'assets/icon.png' }}" >> pubspec.yaml
+            echo "  icons:" >> pubspec.yaml
+            echo "    android:" >> pubspec.yaml
+            echo "      adaptive:" >> pubspec.yaml
+            echo "        foreground: ${{ inputs.icon_path || 'assets/icon.png' }}" >> pubspec.yaml
+          else
+            # 如果文件不存在，创建新的 pubspec.yaml
+            cat > pubspec.yaml << EOF
+          name: ${{ inputs.app_name || 'HelloFlet' }}
+          description: A Flet application.
+          publish_to: 'none'
+          version: 1.0.0
+
+          environment:
+            sdk: '>=3.0.0 <4.0.0'
+
+          dependencies:
+            flutter:
+              sdk: flutter
+            flet: ^0.212.0
+
+          flutter:
+            uses-material-design: true
+            assets:
+              - ${{ inputs.icon_path || 'assets/icon.png' }}
+            icons:
+              android:
+                adaptive:
+                  foreground: ${{ inputs.icon_path || 'assets/icon.png' }}
+          EOF
+          fi
 
       - name: Build APK
-        run: flet build apk --verbose
-        
+        run: flet build apk --verbose --project ${{ inputs.app_name || 'HelloFlet' }} --product ${{ inputs.app_name || 'HelloFlet' }}
+
       - name: Find APK
         id: find_apk
         run: |
           apk_path=$(find build -name "*.apk" -type f | head -n 1)
           echo "APK_PATH=$apk_path" >> $GITHUB_OUTPUT
-          echo "Detected APK at: $apk_path"
 
-      - name: Upload artifact
+      - name: Upload Android APK
         uses: actions/upload-artifact@v4
         with:
-          name: HelloFlet-Android
+          name: ${{ inputs.app_name || 'HelloFlet' }}-Android
           path: ${{ steps.find_apk.outputs.APK_PATH }}
+
+      - name: Add APK to GitHub Release (on tag push)
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ steps.find_apk.outputs.APK_PATH }}
+          name: Release ${{ github.ref_name }}
