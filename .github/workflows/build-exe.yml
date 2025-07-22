@@ -2,6 +2,15 @@ name: Build Windows EXE
 
 on:
   workflow_dispatch:
+    inputs:
+      param1:
+        description: 'Parameter 1'
+        required: true
+        default: 'default_value1'
+      param2:
+        description: 'Parameter 2'
+        required: true
+        default: 'default_value2'
   push:
     tags: [ "v*" ]
 
@@ -32,7 +41,8 @@ jobs:
           key: pyinstaller-${{ runner.os }}-${{ hashFiles('requirements.txt') }}
 
       - name: Build EXE
-        run: pyinstaller -F -w main.py --name HelloFlet
+        run: |
+          pyinstaller -F -w main.py --name HelloFlet --add-data "${{ github.event.inputs.param1 }};${{ github.event.inputs.param2 }}"
 
       - name: Upload EXE
         uses: actions/upload-artifact@v4
