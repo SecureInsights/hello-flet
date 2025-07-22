@@ -1,18 +1,41 @@
-name: build-exe
+name: Build Windows EXE
+
 on:
   workflow_dispatch:
   push:
-    tags: ["v*"]
+    tags: [ "v*" ]
+
 jobs:
-  build-exe:
+  windows-exe:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with: {python-version: "3.11"}
-      - run: pip install -r requirements.txt pyinstaller
-      - run: pyinstaller -F -w main.py --name HelloFlet
-      - uses: actions/upload-artifact@v4
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python & cache pip
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install Python deps
+        run: |
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      - name: Cache PyInstaller build cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~\AppData\Local\pyinstaller\bincache*
+            ~\AppData\Local\pyinstaller\Cache
+          key: pyinstaller-${{ runner.os }}-${{ hashFiles('requirements.txt') }}
+
+      - name: Build EXE
+        run: pyinstaller -F -w main.py --name HelloFlet
+
+      - name: Upload EXE
+        uses: actions/upload-artifact@v4
         with:
           name: HelloFlet-Windows
           path: dist/HelloFlet.exe
