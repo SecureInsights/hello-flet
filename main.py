@@ -1,56 +1,48 @@
+# todo.py
+import json
 import os
-import pickle
 from pathlib import Path
+
 import flet as ft
 
-SAVE_FILE = Path.home() / "todo_save.pkl"
+# ------------------------------------------------------------------
+# 数据持久化：Android 私有目录 /data/data/<package>/files/todo.json
+# ------------------------------------------------------------------
+SAVE_PATH = Path(os.environ.get("HOME", ".")) / "todo.json"
 
-# ---------- 持久化 ----------
-def load_tasks():
-    return pickle.load(open(SAVE_FILE, "rb")) if SAVE_FILE.exists() else []
+def load_tasks() -> list[dict]:
+    if SAVE_PATH.exists():
+        try:
+            return json.loads(SAVE_PATH.read_text(encoding="utf-8"))
+        except Exception:
+            pass
+    return []
 
-def save_tasks(tasks):
-    pickle.dump(tasks, open(SAVE_FILE, "wb"))
+def save_tasks(tasks: list[dict]) -> None:
+    SAVE_PATH.write_text(json.dumps(tasks, ensure_ascii=False), encoding="utf-8")
 
-# ---------- 主界面 ----------
+
+# ------------------------------------------------------------------
+# 主界面
+# ------------------------------------------------------------------
 def main(page: ft.Page):
     page.title = "待办清单"
     page.bgcolor = ft.Colors.BLUE_GREY_50
-    page.scroll = ft.ScrollMode.ADAPTIVE     # 整页滚动，防止键盘遮挡
+    page.scroll = ft.ScrollMode.ADAPTIVE  # 键盘弹出时自动滚动
 
-    # 读取数据
+    # 读取本地数据
     tasks = load_tasks()
 
-    # 统一内边距
-    PAD = 16
-
+    PAD = 16  # 统一内边距
     todo_list = ft.Column(spacing=6)
 
-    def add_task(e):
-        text = new_task_field.value.strip()
-        if not text:
-            return
-        tasks.append({"text": text, "done": False})
-        new_task_field.value = ""
-        build_list()
-        save_tasks(tasks)
-
-    def toggle_done(checkbox, index):
-        tasks[index]["done"] = checkbox.value
-        build_list()
-        save_tasks(tasks)
-
-    def delete_task(index):
-        tasks.pop(index)
-        build_list()
-        save_tasks(tasks)
-
+    # ---------------- 构建列表 ----------------
     def build_list():
         todo_list.controls.clear()
         if not tasks:
             todo_list.controls.append(
                 ft.Container(
-                    content=ft.Text("暂无任务，快来添加吧！", color=ft.Colors.GREY, size=16),
+                    content=ft.Text("暂无任务，快来添加吧！", size=16, color=ft.Colors.GREY),
                     alignment=ft.alignment.center,
                     padding=ft.padding.only(top=40)
                 )
@@ -77,20 +69,44 @@ def main(page: ft.Page):
                     tooltip="删除",
                     on_click=lambda _, i=idx: delete_task(i)
                 )
-                todo_list.controls.append(
-                    ft.Container(
-                        content=ft.Row([checkbox, label, delete_btn],
-                                       alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
-                        padding=ft.padding.all(14),
-                        bgcolor=ft.Colors.WHITE,
-                        border_radius=12,
-                        shadow=ft.BoxShadow(blur_radius=4,
-                                            color=ft.Colors.BLACK12,
-                                            offset=ft.Offset(0, 2))
+                card = ft.Container(
+                    content=ft.Row(
+                        [checkbox, label, delete_btn],
+                        alignment=ft.MainAxisAlignment.SPACE_BETWEEN
+                    ),
+                    padding=14,
+                    bgcolor=ft.Colors.WHITE,
+                    border_radius=12,
+                    shadow=ft.BoxShadow(
+                        blur_radius=4,
+                        color=ft.Colors.BLACK12,
+                        offset=ft.Offset(0, 2)
                     )
                 )
+                todo_list.controls.append(card)
         page.update()
 
+    # ---------------- 事件处理 ----------------
+    def add_task(e):
+        text = new_task_field.value.strip()
+        if not text:
+            return
+        tasks.append({"text": text, "done": False})
+        new_task_field.value = ""
+        save_tasks(tasks)
+        build_list()
+
+    def toggle_done(checkbox, index):
+        tasks[index]["done"] = checkbox.value
+        save_tasks(tasks)
+        build_list()
+
+    def delete_task(index):
+        tasks.pop(index)
+        save_tasks(tasks)
+        build_list()
+
+    # ---------------- 输入栏 ----------------
     new_task_field = ft.TextField(
         hint_text="输入新任务…",
         expand=True,
@@ -101,10 +117,11 @@ def main(page: ft.Page):
         on_submit=add_task
     )
 
+    # ---------------- 初始渲染 ----------------
     build_list()
 
     page.add(
-        ft.SafeArea(                       # 自动避开刘海/导航条
+        ft.SafeArea(
             content=ft.Column(
                 [
                     # 标题
@@ -114,15 +131,18 @@ def main(page: ft.Page):
                     ),
                     # 输入栏
                     ft.Container(
-                        content=ft.Row([
-                            new_task_field,
-                            ft.FloatingActionButton(
-                                icon=ft.Icons.ADD,
-                                on_click=add_task,
-                                mini=True,
-                                bgcolor=ft.Colors.BLUE
-                            )
-                        ], spacing=8),
+                        content=ft.Row(
+                            [
+                                new_task_field,
+                                ft.FloatingActionButton(
+                                    icon=ft.Icons.ADD,
+                                    on_click=add_task,
+                                    mini=True,
+                                    bgcolor=ft.Colors.BLUE
+                                )
+                            ],
+                            spacing=8
+                        ),
                         padding=ft.padding.symmetric(horizontal=PAD, vertical=6)
                     ),
                     # 分割线
@@ -139,6 +159,11 @@ def main(page: ft.Page):
         )
     )
 
-# ---------- 入口 ----------
+
+# ------------------------------------------------------------------
+# 入口
+# ------------------------------------------------------------------
 if __name__ == "__main__":
+    # 桌面调试：python todo.py
+    # 打包 APK：flet build apk todo.py
     ft.app(target=main, view=ft.AppView.FLET_APP, assets_dir="assets")
