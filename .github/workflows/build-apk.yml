@@ -11,7 +11,7 @@ on:
       icon_path:
         description: "APK 图标文件（仓库内相对路径，如 assets/my_icon.png）"
         required: false
-        default: "assets/icon.png"
+        default: "assets/todo.png"
         type: string
 
   push:
