@@ -40,7 +40,7 @@ jobs:
             ${{ runner.os }}-flutter-
 
       - name: Build APK
-        run: flet build apk --verbose --offline
+        run: flet build apk --verbose
         
       - name: Find APK
         id: find_apk
