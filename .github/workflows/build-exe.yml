@@ -33,7 +33,6 @@ jobs:
       - name: Install dependencies
         run: |
           pip install -r requirements.txt
-          pip install flet
           pip install pyinstaller
 
       - name: Cache Flet build artifacts
@@ -42,11 +41,14 @@ jobs:
           path: |
             ~\.flet\cache
             ~\AppData\Local\Temp\flet-*
+            # 仅添加pyinstaller相关缓存路径
+            ~\AppData\Roaming\Python\Python311\site-packages\pyinstaller
+            ~\AppData\Local\pip\Cache
           key: flet-cache-${{ runner.os }}-${{ hashFiles('requirements.txt') }}
 
       - name: Build EXE with Flet pack
-        # 使用单行命令避免换行符问题
         run: flet pack main.py --name "${{ github.event.inputs.app_name }}" --icon "${{ github.event.inputs.icon_path }}" 
+
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
