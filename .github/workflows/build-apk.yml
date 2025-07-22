@@ -2,18 +2,6 @@ name: Build Android APK
 
 on:
   workflow_dispatch:
-    inputs:
-      app_name:
-        description: "应用名称"
-        required: false
-        default: "Todolist"
-        type: string
-      icon_path:
-        description: "APK 图标文件（仓库内相对路径，如 assets/my_icon.png）"
-        required: false          # 允许留空，留空就用默认 assets/icon.png
-        default: "assets/todo.png"
-        type: string
-
   push:
     tags: [ "v*" ]
 
@@ -27,7 +15,7 @@ jobs:
       - name: Setup Flutter & cache SDK
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: "3.29.2"
+          flutter-version: "3.29.2"  # 修改为 3.29.2
           channel: stable
           cache: true
 
@@ -50,28 +38,17 @@ jobs:
           key: ${{ runner.os }}-flutter-${{ hashFiles('pubspec.yaml') }}
           restore-keys: |
             ${{ runner.os }}-flutter-
-
-      # 如果图标文件不存在，给一个提示，避免构建失败
-      - name: Check icon exists
-        run: |
-          if [ ! -f "${{ github.event.inputs.icon_path }}" ]; then
-            echo "图标文件 '${{ github.event.inputs.icon_path }}' 不存在，将使用默认 assets/icon.png"
-          fi
-
-      # 使用用户提供的图标，或回退到默认
       - name: Build APK
-        run: |
-          flet build apk --verbose --icon="${{ github.event.inputs.icon_path || 'assets/icon.png' }}" --name="${{ github.event.inputs.app_name || 'Todolist' }}"
-
+        run: flet build apk --verbose
+        
       - name: Find APK
         id: find_apk
         run: |
           apk_path=$(find build -name "*.apk" -type f | head -n 1)
           echo "APK_PATH=$apk_path" >> $GITHUB_OUTPUT
           echo "Detected APK at: $apk_path"
-
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ github.event.inputs.app_name || 'Todolist' }}-Android
+          name: HelloFlet-Android
           path: ${{ steps.find_apk.outputs.APK_PATH }}
