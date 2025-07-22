@@ -44,12 +44,8 @@ jobs:
           key: flet-cache-${{ runner.os }}-${{ hashFiles('requirements.txt') }}
 
       - name: Build EXE with Flet pack
-        # 使用PowerShell兼容的语法，用反引号`作为换行符
-        run: |
-          flet pack main.py `
-            --name "${{ github.event.inputs.app_name }}" `
-            --icon "${{ github.event.inputs.icon_path }}" `
-            --output "dist"
+        # 使用单行命令避免换行符问题
+        run: flet pack main.py --name "${{ github.event.inputs.app_name }}" --icon "${{ github.event.inputs.icon_path }}" --output "dist"
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
