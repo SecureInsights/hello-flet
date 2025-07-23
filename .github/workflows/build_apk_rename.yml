@@ -1,4 +1,4 @@
-name: Build Android APK Rename
+name: Build Android APK re
 
 on:
   workflow_dispatch:
@@ -76,8 +76,10 @@ jobs:
       - name: Download apktool.jar
         run: |
           APKTOOL_JAR="apktool.jar"
+          APKTOOL_URL="https://github.com/iBotPeaches/Apktool/releases/download/v2.12.0/apktool_2.12.0.jar"
           if [ ! -f "$APKTOOL_JAR" ]; then
-            wget -q -O $APKTOOL_JAR https://github.com/iBotPeaches/Apktool/releases/download/v2.8.0/apktool_2.8.0.jar
+            echo "尝试下载 $APKTOOL_URL"
+            wget -q -O $APKTOOL_JAR $APKTOOL_URL || (echo "下载失败，请检查链接的合法性或网络连接" && exit 1)
           fi
 
       - name: Modify APK Label
@@ -101,6 +103,13 @@ jobs:
 
             # 修改 label
             sed -i "s/android:label=\"[^\"]*\"/android:label=\"$new_name\"/g" "$manifest_path"
+
+            # 修复 attrs.xml 文件（如果存在）
+            attrs_path="$WORK_DIR/decoded/res/values/attrs.xml"
+            if [ -f "$attrs_path" ]; then
+              sed -i '/id="@null"/d' "$attrs_path"
+              sed -i '/id="none"/d' "$attrs_path"
+            fi
 
             # 重新打包 APK
             java -jar $APKTOOL_JAR b -o "$dst" "$WORK_DIR/decoded"
