@@ -13,118 +13,99 @@ on:
         required: false
         default: "assets/todo.png"
         type: string
-
   push:
     tags: [ "v*" ]
+
+env:
+  APKTOOL_VERSION: 2.12.0
+  BUILD_TOOLS_VERSION: 34.0.0
+  KEYSTORE_PASSWORD: android
+  KEY_PASSWORD: android
 
 jobs:
   android-apk:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      # ---------- 1. 拉代码 ----------
+      - uses: actions/checkout@v4
 
-      - name: Setup Flutter & cache SDK
-        uses: subosito/flutter-action@v2
+      # ---------- 2. Flutter ----------
+      - uses: subosito/flutter-action@v2
         with:
           flutter-version: "3.29.2"
           channel: stable
           cache: true
 
-      - name: Setup Python & cache pip
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-          cache: "pip"
-
-      - name: Install Flet
-        run: pip install flet
-
-      - name: Cache Flutter
+      # ---------- 3. 缓存 Android 工具链 ----------
+      - name: Cache Android tools
         uses: actions/cache@v4
+        id: cache-tools
         with:
           path: |
-            ~/.pub-cache
-            ~/.gradle/caches
-            ~/.gradle/wrapper
-          key: ${{ runner.os }}-flutter-${{ hashFiles('pubspec.yaml') }}
-          restore-keys: |
-            ${{ runner.os }}-flutter-
+            ${{ github.workspace }}/.cache/apktool.jar
+            ${{ github.workspace }}/.cache/build-tools
+            ${{ github.workspace }}/.cache/my-release-key.keystore
+          key: android-tools-${{ env.APKTOOL_VERSION }}-${{ env.BUILD_TOOLS_VERSION }}
 
-      # ① 如果用户给了图标，就替换默认 assets/icon.png
+      # ---------- 4. 下载 & 解压工具（仅缓存未命中时） ----------
+      - name: Download Android tools
+        if: steps.cache-tools.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p .cache
+          # apktool
+          wget -q https://github.com/iBotPeaches/Apktool/releases/download/v${APKTOOL_VERSION}/apktool_${APKTOOL_VERSION}.jar \
+            -O .cache/apktool.jar
+          # build-tools（内含 zipalign 与 apksigner.jar）
+          wget -q https://dl.google.com/android/repository/build-tools_r${BUILD_TOOLS_VERSION}-linux.zip \
+            -O .cache/build-tools.zip
+          unzip -q .cache/build-tools.zip -d .cache
+          mv .cache/android-* .cache/build-tools
+          # 生成 keystore
+          keytool -genkey -v -keystore .cache/my-release-key.keystore \
+            -alias myalias -keyalg RSA -keysize 2048 -validity 10000 \
+            -storepass ${{ env.KEYSTORE_PASSWORD }} -keypass ${{ env.KEY_PASSWORD }} \
+            -dname "CN=ci, OU=ci, O=ci, L=ci, S=ci, C=CN"
+
+      # ---------- 5. 可选：替换图标 ----------
       - name: Use custom icon
         run: |
           ICON="${{ github.event.inputs.icon_path || 'assets/icon.png' }}"
           if [ -f "$ICON" ]; then
-            echo "使用图标: $ICON"
             cp "$ICON" assets/icon.png
-          else
-            echo "图标文件不存在，保持默认 assets/icon.png"
           fi
 
-      # ② 构建 APK（不带 --icon / --name）
-      - name: Build APK
-        run: flet build apk --verbose
+      # ---------- 6. 构建 APK ----------
+      - run: flet build apk --verbose
 
+      # ---------- 7. 找到并复制 APK ----------
       - name: Find APK
         id: find_apk
         run: |
           apk_path=$(find build -name "*.apk" -type f | head -n 1)
-          echo "APK_PATH=$apk_path" >> $GITHUB_OUTPUT
-          echo "Detected APK at: $apk_path"
+          cp "$apk_path" app-release.apk
+          echo "APK_PATH=app-release.apk" >> $GITHUB_OUTPUT
 
-      - name: Download apktool.jar
+      # ---------- 8. 解码 → 改 label → 对齐 → 签名 ----------
+      - name: Patch, zipalign & sign
         run: |
-          APKTOOL_JAR="apktool.jar"
-          APKTOOL_URL="https://github.com/iBotPeaches/Apktool/releases/download/v2.12.0/apktool_2.12.0.jar"
-          if [ ! -f "$APKTOOL_JAR" ]; then
-            echo "尝试下载 $APKTOOL_URL"
-            wget -q -O $APKTOOL_JAR $APKTOOL_URL || (echo "下载失败，请检查链接的合法性或网络连接" && exit 1)
-          fi
+          # 解码
+          java -jar .cache/apktool.jar d -f -o decoded app-release.apk
+          # 修改 label
+          sed -i 's/android:label="[^"]*"/android:label="${{ github.event.inputs.app_name || 'Todolist' }}"/g' \
+            decoded/AndroidManifest.xml
+          # 重打包
+          java -jar .cache/apktool.jar b -f -o unsigned.apk decoded
+          # 对齐
+          .cache/build-tools/zipalign -v 4 unsigned.apk aligned.apk
+          # 签名
+          java -jar .cache/build-tools/lib/apksigner.jar sign \
+            --ks .cache/my-release-key.keystore --ks-key-alias myalias \
+            --ks-pass pass:${{ env.KEYSTORE_PASSWORD }} \
+            --key-pass pass:${{ env.KEY_PASSWORD }} \
+            --out "${{ github.event.inputs.app_name || 'Todolist' }}.apk" aligned.apk
 
-      - name: Modify APK Label
-        run: |
-          # 定义变量
-          APK_IN=${{ steps.find_apk.outputs.APK_PATH }}
-          APK_OUT="modified-${{ github.event.inputs.app_name || 'Todolist' }}.apk"
-          NEW_NAME=${{ github.event.inputs.app_name || 'Todolist' }}
-          APKTOOL_JAR="apktool.jar"
-          WORK_DIR=$(mktemp -d)
-
-          # 修改 AndroidManifest.xml 的 label
-          patch_manifest() {
-            local src=$1
-            local dst=$2
-            local new_name=$3
-
-            # 解码 APK
-            java -jar $APKTOOL_JAR d -o "$WORK_DIR/decoded" "$src"
-            manifest_path="$WORK_DIR/decoded/AndroidManifest.xml"
-
-            # 修改 label
-            sed -i "s/android:label=\"[^\"]*\"/android:label=\"$new_name\"/g" "$manifest_path"
-
-            # 修复 attrs.xml 文件（如果存在）
-            attrs_path="$WORK_DIR/decoded/res/values/attrs.xml"
-            if [ -f "$attrs_path" ]; then
-              sed -i '/id="@null"/d' "$attrs_path"
-              sed -i '/id="none"/d' "$attrs_path"
-            fi
-
-            # 重新打包 APK
-            java -jar $APKTOOL_JAR b -o "$dst" "$WORK_DIR/decoded"
-          }
-
-          # 主流程
-          patched_manifest_apk="$WORK_DIR/patched_manifest.apk"
-          patch_manifest "$APK_IN" "$patched_manifest_apk" "$NEW_NAME"
-
-          # 拷贝结果
-          mv "$patched_manifest_apk" "$APK_OUT"
-          echo "✅ 完成：$APK_OUT"
-
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
+      # ---------- 9. 上传成品 ----------
+      - uses: actions/upload-artifact@v4
         with:
           name: ${{ github.event.inputs.app_name || 'Todolist' }}-Android
-          path: ${{ github.workspace }}/modified-${{ github.event.inputs.app_name || 'Todolist' }}.apk
+          path: ${{ github.event.inputs.app_name || 'Todolist' }}.apk
