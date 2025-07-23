@@ -42,26 +42,31 @@ jobs:
         id: cache-tools
         with:
           path: |
-            ${{ github.workspace }}/.cache/apktool.jar
-            ${{ github.workspace }}/.cache/build-tools
-            ${{ github.workspace }}/.cache/my-release-key.keystore
+            ~/cache-android/apktool.jar
+            ~/cache-android/build-tools
+            ~/cache-android/my-release-key.keystore
           key: android-tools-${{ env.APKTOOL_VERSION }}-${{ env.BUILD_TOOLS_VERSION }}
 
       # ---------- 4. 下载 & 解压工具（仅缓存未命中时） ----------
-      - name: Download Android tools
+      - name: Download Android tools  # 仅缓存未命中时执行
         if: steps.cache-tools.outputs.cache-hit != 'true'
         run: |
-          mkdir -p .cache
+          set -e
+          CACHE_DIR="$HOME/cache-android"
+          mkdir -p "$CACHE_DIR"
+          
           # apktool
           wget -q https://github.com/iBotPeaches/Apktool/releases/download/v${APKTOOL_VERSION}/apktool_${APKTOOL_VERSION}.jar \
-            -O .cache/apktool.jar
-          # build-tools（内含 zipalign 与 apksigner.jar）
+            -O "$CACHE_DIR/apktool.jar"
+          
+          # build-tools
           wget -q https://dl.google.com/android/repository/build-tools_r${BUILD_TOOLS_VERSION}-linux.zip \
-            -O .cache/build-tools.zip
-          unzip -q .cache/build-tools.zip -d .cache
-          mv .cache/android-* .cache/build-tools
-          # 生成 keystore
-          keytool -genkey -v -keystore .cache/my-release-key.keystore \
+            -O "$CACHE_DIR/build-tools.zip"
+          unzip -q "$CACHE_DIR/build-tools.zip" -d "$CACHE_DIR"
+          mv "$CACHE_DIR"/android-* "$CACHE_DIR/build-tools"
+          
+          # keystore
+          keytool -genkey -v -keystore "$CACHE_DIR/my-release-key.keystore" \
             -alias myalias -keyalg RSA -keysize 2048 -validity 10000 \
             -storepass ${{ env.KEYSTORE_PASSWORD }} -keypass ${{ env.KEY_PASSWORD }} \
             -dname "CN=ci, OU=ci, O=ci, L=ci, S=ci, C=CN"
